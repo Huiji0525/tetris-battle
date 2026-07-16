@@ -178,11 +178,11 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxODE2OTcsImV4cCI6MjA5OTc1NzY5N30.8W0yZlzcIlEXpphDXecGN9HMMUIOZqJEwc5AAcO5vVg';
 
         // 安全初始化 Supabase，防止套件載入延遲
-        let supabaseClient;
+      let supabaseClient;
         if (typeof supabase !== 'undefined') {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
         } else if (typeof window.supabase !== 'undefined') {
-            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
         } else {
             console.error("Supabase SDK 載入失敗，請檢查網路連線。");
         }
