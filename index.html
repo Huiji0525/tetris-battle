@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (排行榜版)</title>
+    <title>經典俄羅斯方塊 Tetris (Supabase 線上排行版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body {
             background-color: #202020;
@@ -94,7 +95,6 @@
         .rank-silver { color: #bdc3c7; font-weight: bold; }
         .rank-bronze { color: #e67e22; font-weight: bold; }
 
-        /* 暫存方塊顯示區 */
         #hold-canvas {
             background-color: #111;
             border: 2px solid #34495e;
@@ -114,19 +114,11 @@
             width: 100%;
         }
 
-        #start-btn {
-            background-color: #e74c3c;
-        }
-        #start-btn:hover {
-            background-color: #c0392b;
-        }
+        #start-btn { background-color: #e74c3c; }
+        #start-btn:hover { background-color: #c0392b; }
 
-        #pause-btn {
-            background-color: #3498db;
-        }
-        #pause-btn:hover {
-            background-color: #2980b9;
-        }
+        #pause-btn { background-color: #3498db; }
+        #pause-btn:hover { background-color: #2980b9; }
 
         .controls-info {
             font-size: 0.75rem;
@@ -159,9 +151,10 @@
             </div>
 
             <div class="box">
-                <h2>🏆 排行榜 (Top 5)</h2>
+                <h2>🏆 線上排行榜 (Top 5)</h2>
                 <ul id="leaderboard" class="leaderboard-list">
-                    </ul>
+                    <li>連線中...</li>
+                </ul>
             </div>
 
             <button id="start-btn" class="btn" onclick="startGame()">開始遊戲</button>
@@ -180,6 +173,20 @@
     </div>
 
     <script>
+        // 2. 填寫正確的 Supabase 連線資訊（已自動移除網址尾端 /rest/v1/ 與修正金鑰單引號）
+        const SUPABASE_URL = 'https://tevslrifouvgajmogozf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NzQ3MTUsImV4cCI6MjA4OTA1MDcxNX0.XWsh0-30B1vOis6fR9f7_WzT_R8P0u-O-Ym9Kj0-49U';
+
+        // 安全初始化 Supabase，防止套件載入延遲
+        let supabaseClient;
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } else if (typeof window.supabase !== 'undefined') {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } else {
+            console.error("Supabase SDK 載入失敗，請檢查網路連線。");
+        }
+
         const canvas = document.getElementById('tetris');
         const context = canvas.getContext('2d');
         const holdCanvas = document.getElementById('hold-canvas');
@@ -187,10 +194,9 @@
         
         const scoreElement = document.getElementById('score');
         const pauseBtn = document.getElementById('pause-btn');
-        // ⚠️ 填寫你的 Supabase 連線資訊
-        const SUPABASE_URL = 'https://tevslrifouvgajmogozf.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxODE2OTcsImV4cCI6MjA5OTc1NzY5N30.8W0yZlzcIlEXpphDXecGN9HMMUIOZqJEwc5AAcO5vVg'; // 貼上你截圖中那一長串完整的金鑰
-        
+        const nameDisplay = document.getElementById('player-name-display');
+        const leaderboardElement = document.getElementById('leaderboard');
+
         context.scale(30, 30);
         holdContext.scale(20, 20);
 
@@ -198,13 +204,7 @@
         const pieces = 'ILJOTSZ';
         const colors = [
             null,
-            '#00f0f0', // I
-            '#0000f0', // J
-            '#f0a000', // L
-            '#f0f000', // O
-            '#00f000', // S
-            '#a000f0', // T
-            '#f00000'  // Z
+            '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f000', '#a000f0', '#f00000'
         ];
 
         const player = {
@@ -218,7 +218,6 @@
 
         let holdPieceType = null; 
         let hasHeldThisTurn = false;
-
         let dropCounter = 0;
         let dropInterval = 1000;
         let lastTime = 0;
@@ -226,11 +225,10 @@
         let gameRunning = false;
         let isPaused = false;
 
-        // 初始化：讀取或設定使用者名稱與排行榜
+        // 初始化
         initPlayerAndLeaderboard();
 
         function initPlayerAndLeaderboard() {
-            // 讀取上次使用的名字
             let savedName = localStorage.getItem('tetris_username');
             if (!savedName) {
                 savedName = prompt('請輸入您的玩家名稱：', 'Guest') || 'Guest';
@@ -239,11 +237,10 @@
             player.username = savedName;
             nameDisplay.innerText = player.username;
 
-            // 渲染排行榜
+            // 載入線上排行榜
             renderLeaderboard();
         }
 
-        // 修改名字的功能
         function changeUsername() {
             const newName = prompt('請輸入新的玩家名稱：', player.username);
             if (newName && newName.trim() !== '') {
@@ -253,41 +250,54 @@
             }
         }
 
-        // 渲染排行榜 UI
-        function renderLeaderboard() {
-            leaderboardElement.innerHTML = '';
-            const scores = JSON.parse(localStorage.getItem('tetris_leaderboard')) || [];
-            
-            // 補滿 5 個空位，看起來比較整齊
-            for (let i = 0; i < 5; i++) {
-                const li = document.createElement('li');
-                if (scores[i]) {
-                    let rankClass = '';
-                    if (i === 0) rankClass = 'class="rank-gold"';
-                    else if (i === 1) rankClass = 'class="rank-silver"';
-                    else if (i === 2) rankClass = 'class="rank-bronze"';
+        // 🌟 獲取線上排行榜 (Top 5)
+        async function renderLeaderboard() {
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('leaderboard')
+                    .select('name, score')
+                    .order('score', { ascending: false })
+                    .limit(5);
 
-                    li.innerHTML = `<span ${rankClass}>${i+1}. ${scores[i].name}</span> <span>${scores[i].score}</span>`;
-                } else {
-                    li.innerHTML = `<span style="color: #5d6d7e">${i+1}. ---</span> <span style="color: #5d6d7e">0</span>`;
+                if (error) throw error;
+
+                leaderboardElement.innerHTML = '';
+                for (let i = 0; i < 5; i++) {
+                    const li = document.createElement('li');
+                    if (data && data[i]) {
+                        let rankClass = '';
+                        if (i === 0) rankClass = 'class="rank-gold"';
+                        else if (i === 1) rankClass = 'class="rank-silver"';
+                        else if (i === 2) rankClass = 'class="rank-bronze"';
+
+                        li.innerHTML = `<span ${rankClass}>${i+1}. ${data[i].name}</span> <span>${data[i].score}</span>`;
+                    } else {
+                        li.innerHTML = `<span style="color: #5d6d7e">${i+1}. ---</span> <span style="color: #5d6d7e">0</span>`;
+                    }
+                    leaderboardElement.appendChild(li);
                 }
-                leaderboardElement.appendChild(li);
+            } catch (err) {
+                console.error('無法載入線上排行榜:', err);
+                leaderboardElement.innerHTML = '<li style="color: red;">載入失敗</li>';
             }
         }
 
-        // 遊戲結束時儲存分數至排行榜
-        function saveScoreToLeaderboard() {
-            let scores = JSON.parse(localStorage.getItem('tetris_leaderboard')) || [];
-            scores.push({ name: player.username, score: player.score });
-            
-            // 依分數從高到低排序
-            scores.sort((a, b) => b.score - a.score);
-            
-            // 只保留前五名
-            scores = scores.slice(0, 5);
-            
-            localStorage.setItem('tetris_leaderboard', JSON.stringify(scores));
-            renderLeaderboard();
+        // 🌟 上傳玩家分數至雲端
+        async function saveScoreToLeaderboard() {
+            if (!supabaseClient) return;
+            try {
+                const { error } = await supabaseClient
+                    .from('leaderboard')
+                    .insert([{ name: player.username, score: player.score }]);
+
+                if (error) throw error;
+                
+                // 重新載入最新排行
+                renderLeaderboard();
+            } catch (err) {
+                console.error('上傳分數失敗:', err);
+            }
         }
 
         function createMatrix(w, h) {
@@ -420,7 +430,7 @@
             hasHeldThisTurn = false;
 
             if (collide(arena, player)) {
-                // 儲存排行榜分數
+                // 儲存至 Supabase 雲端排行榜
                 saveScoreToLeaderboard();
                 
                 arena.forEach(row => row.fill(0));
@@ -531,7 +541,6 @@
                 hasHeldThisTurn = false;
                 updateScore();
                 
-                // 開始前確認是否有設定名字
                 if (!player.username || player.username === 'Guest') {
                     changeUsername();
                 }
