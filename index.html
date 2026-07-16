@@ -173,11 +173,11 @@
     </div>
 
     <script>
-        // 2. 填寫正確的 Supabase 連線資訊（已自動移除網址尾端 /rest/v1/ 與修正金鑰單引號）
-        const SUPABASE_URL = 'https://tevslrifouvgajmogozf.supabase.co';
-        const SUPABASEkey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxODE2OTcsImV4cCI6MjA5OTc1NzY5N30.8W0yZlzcIlEXpphDXecGN9HMMUIOZqJEwc5AAcO5vVg';
+        // 2. 填寫正確的 Supabase 連線資訊（已完全修正網址與最新 API 金鑰）
+        const supabaseUrl = 'https://tevslrifouvgajmogozf.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxODE2OTcsImV4cCI6MjA5OTc1NzY5N30.8W0yZlzcIlEXpphDXecGN9HMMUIOZqJEwc5AAcO5vVg';
 
-      // 安全初始化，防止同名變數衝突導致 JavaScript 卡死
+        // 安全初始化 Supabase，防止變數名稱與 CDN 載入的全域變數衝突
         let supabaseClient;
         if (typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
@@ -204,7 +204,7 @@
         const pieces = 'ILJOTSZ';
         const colors = [
             null,
-            '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f000', '#a000f0', '#f00000'
+            '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f0f0', '#a000f0', '#f00000'
         ];
 
         const player = {
