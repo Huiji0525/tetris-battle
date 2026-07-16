@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (升級版)</title>
+    <title>經典俄羅斯方塊 Tetris (排行榜版)</title>
     <style>
         body {
             background-color: #202020;
@@ -45,13 +45,13 @@
         .info-panel {
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            min-width: 140px;
+            gap: 12px;
+            min-width: 160px;
         }
 
         .box {
             background: #34495e;
-            padding: 12px;
+            padding: 10px;
             border-radius: 5px;
             text-align: center;
         }
@@ -65,10 +65,34 @@
 
         .box p {
             margin: 0;
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: bold;
             color: #2ecc71;
         }
+
+        /* 排行榜樣式 */
+        .leaderboard-list {
+            margin: 5px 0 0 0;
+            padding: 0;
+            list-style: none;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 5px;
+            border-bottom: 1px dashed #4f5d73;
+        }
+
+        .leaderboard-list li:last-child {
+            border: none;
+        }
+
+        .rank-gold { color: #f1c40f; font-weight: bold; }
+        .rank-silver { color: #bdc3c7; font-weight: bold; }
+        .rank-bronze { color: #e67e22; font-weight: bold; }
 
         /* 暫存方塊顯示區 */
         #hold-canvas {
@@ -113,14 +137,19 @@
 </head>
 <body>
 
-    <h1>TETRIS</h1>
+    <h1 id="game-title">TETRIS</h1>
 
     <div class="game-container">
         <canvas id="tetris" width="300" height="600"></canvas>
 
         <div class="info-panel">
             <div class="box">
-                <h2>保留方塊 (Z)</h2>
+                <h2>目前玩家</h2>
+                <p id="player-name-display" style="color: #f1c40f; font-size: 1.1rem; cursor: pointer;" onclick="changeUsername()">未登入 (點此修改)</p>
+            </div>
+
+            <div class="box">
+                <h2>保留 (Z)</h2>
                 <canvas id="hold-canvas" width="80" height="80"></canvas>
             </div>
             
@@ -128,10 +157,11 @@
                 <h2>分數</h2>
                 <p id="score">0</p>
             </div>
-            
+
             <div class="box">
-                <h2>消行數</h2>
-                <p id="lines">0</p>
+                <h2>🏆 排行榜 (Top 5)</h2>
+                <ul id="leaderboard" class="leaderboard-list">
+                    </ul>
             </div>
 
             <button id="start-btn" class="btn" onclick="startGame()">開始遊戲</button>
@@ -156,12 +186,12 @@
         const holdContext = holdCanvas.getContext('2d');
         
         const scoreElement = document.getElementById('score');
-        const linesElement = document.getElementById('lines');
         const pauseBtn = document.getElementById('pause-btn');
+        const nameDisplay = document.getElementById('player-name-display');
+        const leaderboardElement = document.getElementById('leaderboard');
 
-        // 縮放主畫面與保留畫面
         context.scale(30, 30);
-        holdContext.scale(20, 20); // 讓保留區的方塊看起來小一點
+        holdContext.scale(20, 20);
 
         const arena = createMatrix(10, 20);
         const pieces = 'ILJOTSZ';
@@ -179,14 +209,14 @@
         const player = {
             pos: {x: 0, y: 0},
             matrix: null,
-            type: null, // 記錄當前方塊種類
+            type: null,
             score: 0,
-            lines: 0
+            lines: 0,
+            username: 'Guest'
         };
 
-        // 保留方塊相關變數
         let holdPieceType = null; 
-        let hasHeldThisTurn = false; // 每回合限制只能換一次
+        let hasHeldThisTurn = false;
 
         let dropCounter = 0;
         let dropInterval = 1000;
@@ -194,6 +224,70 @@
         let gameOver = false;
         let gameRunning = false;
         let isPaused = false;
+
+        // 初始化：讀取或設定使用者名稱與排行榜
+        initPlayerAndLeaderboard();
+
+        function initPlayerAndLeaderboard() {
+            // 讀取上次使用的名字
+            let savedName = localStorage.getItem('tetris_username');
+            if (!savedName) {
+                savedName = prompt('請輸入您的玩家名稱：', 'Guest') || 'Guest';
+                localStorage.setItem('tetris_username', savedName);
+            }
+            player.username = savedName;
+            nameDisplay.innerText = player.username;
+
+            // 渲染排行榜
+            renderLeaderboard();
+        }
+
+        // 修改名字的功能
+        function changeUsername() {
+            const newName = prompt('請輸入新的玩家名稱：', player.username);
+            if (newName && newName.trim() !== '') {
+                player.username = newName.trim();
+                localStorage.setItem('tetris_username', player.username);
+                nameDisplay.innerText = player.username;
+            }
+        }
+
+        // 渲染排行榜 UI
+        function renderLeaderboard() {
+            leaderboardElement.innerHTML = '';
+            const scores = JSON.parse(localStorage.getItem('tetris_leaderboard')) || [];
+            
+            // 補滿 5 個空位，看起來比較整齊
+            for (let i = 0; i < 5; i++) {
+                const li = document.createElement('li');
+                if (scores[i]) {
+                    let rankClass = '';
+                    if (i === 0) rankClass = 'class="rank-gold"';
+                    else if (i === 1) rankClass = 'class="rank-silver"';
+                    else if (i === 2) rankClass = 'class="rank-bronze"';
+
+                    li.innerHTML = `<span ${rankClass}>${i+1}. ${scores[i].name}</span> <span>${scores[i].score}</span>`;
+                } else {
+                    li.innerHTML = `<span style="color: #5d6d7e">${i+1}. ---</span> <span style="color: #5d6d7e">0</span>`;
+                }
+                leaderboardElement.appendChild(li);
+            }
+        }
+
+        // 遊戲結束時儲存分數至排行榜
+        function saveScoreToLeaderboard() {
+            let scores = JSON.parse(localStorage.getItem('tetris_leaderboard')) || [];
+            scores.push({ name: player.username, score: player.score });
+            
+            // 依分數從高到低排序
+            scores.sort((a, b) => b.score - a.score);
+            
+            // 只保留前五名
+            scores = scores.slice(0, 5);
+            
+            localStorage.setItem('tetris_leaderboard', JSON.stringify(scores));
+            renderLeaderboard();
+        }
 
         function createMatrix(w, h) {
             const matrix = [];
@@ -204,59 +298,20 @@
         }
 
         function createPiece(type) {
-            if (type === 'T') {
-                return [
-                    [0, 0, 0],
-                    [1, 1, 1],
-                    [0, 1, 0],
-                ];
-            } else if (type === 'O') {
-                return [
-                    [2, 2],
-                    [2, 2],
-                ];
-            } else if (type === 'L') {
-                return [
-                    [0, 3, 0],
-                    [0, 3, 0],
-                    [0, 3, 3],
-                ];
-            } else if (type === 'J') {
-                return [
-                    [0, 4, 0],
-                    [0, 4, 0],
-                    [4, 4, 0],
-                ];
-            } else if (type === 'I') {
-                return [
-                    [0, 5, 0, 0],
-                    [0, 5, 0, 0],
-                    [0, 5, 0, 0],
-                    [0, 5, 0, 0],
-                ];
-            } else if (type === 'S') {
-                return [
-                    [0, 6, 6],
-                    [6, 6, 0],
-                    [0, 0, 0],
-                ];
-            } else if (type === 'Z') {
-                return [
-                    [7, 7, 0],
-                    [0, 7, 7],
-                    [0, 0, 0],
-                ];
-            }
+            if (type === 'T') return [[0, 0, 0], [1, 1, 1], [0, 1, 0]];
+            if (type === 'O') return [[2, 2], [2, 2]];
+            if (type === 'L') return [[0, 3, 0], [0, 3, 0], [0, 3, 3]];
+            if (type === 'J') return [[0, 4, 0], [0, 4, 0], [4, 4, 0]];
+            if (type === 'I') return [[0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0]];
+            if (type === 'S') return [[0, 6, 6], [6, 6, 0], [0, 0, 0]];
+            if (type === 'Z') return [[7, 7, 0], [0, 7, 7], [0, 0, 0]];
         }
 
         function draw() {
-            // 繪製主畫面
             context.fillStyle = '#000';
             context.fillRect(0, 0, canvas.width, canvas.height);
             drawMatrix(context, arena, {x: 0, y: 0});
             drawMatrix(context, player.matrix, player.pos);
-
-            // 繪製暫存畫面
             drawHold();
         }
 
@@ -274,14 +329,11 @@
             });
         }
 
-        // 繪製保留區的方塊
         function drawHold() {
             holdContext.fillStyle = '#111';
             holdContext.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
-
             if (holdPieceType) {
                 const tempMatrix = createPiece(holdPieceType);
-                // 居中對齊計算
                 const offsetX = (4 - tempMatrix[0].length) / 2;
                 const offsetY = (4 - tempMatrix.length) / 2;
                 drawMatrix(holdContext, tempMatrix, {x: offsetX, y: offsetY});
@@ -316,9 +368,7 @@
             let rowCount = 1;
             outer: for (let y = arena.length - 1; y > 0; --y) {
                 for (let x = 0; x < arena[y].length; ++x) {
-                    if (arena[y][x] === 0) {
-                        continue outer;
-                    }
+                    if (arena[y][x] === 0) continue outer;
                 }
                 const row = arena.splice(y, 1)[0].fill(0);
                 arena.unshift(row);
@@ -363,32 +413,30 @@
         function playerReset() {
             const randomType = pieces[pieces.length * Math.random() | 0];
             player.matrix = createPiece(randomType);
-            player.type = randomType; // 記錄當前方塊種類
+            player.type = randomType;
             player.pos.y = 0;
             player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
-            hasHeldThisTurn = false; // 新回合重置保留功能
+            hasHeldThisTurn = false;
 
             if (collide(arena, player)) {
+                // 儲存排行榜分數
+                saveScoreToLeaderboard();
+                
                 arena.forEach(row => row.fill(0));
                 gameOver = true;
                 gameRunning = false;
-                alert('遊戲結束！最終得分：' + player.score);
+                alert(`遊戲結束！\n${player.username} 的最終得分為：${player.score}`);
                 document.getElementById('start-btn').innerText = '再玩一次';
             }
         }
 
-        // 🌟 新增功能：保留 (Hold) 方塊 (鍵盤 Z)
         function playerHold() {
-            if (hasHeldThisTurn) return; // 每回合只能保留一次
-
+            if (hasHeldThisTurn) return;
             const currentType = player.type;
-
             if (holdPieceType === null) {
-                // 如果保留區是空的，將當前方塊存入，並生成新方塊
                 holdPieceType = currentType;
                 playerReset();
             } else {
-                // 如果保留區已經有方塊，進行交換
                 const temp = holdPieceType;
                 holdPieceType = currentType;
                 player.type = temp;
@@ -396,7 +444,6 @@
                 player.pos.y = 0;
                 player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
             }
-
             hasHeldThisTurn = true;
             draw();
         }
@@ -419,31 +466,19 @@
         function rotate(matrix, dir) {
             for (let y = 0; y < matrix.length; ++y) {
                 for (let x = 0; x < y; ++x) {
-                    [
-                        matrix[x][y],
-                        matrix[y][x],
-                    ] = [
-                        matrix[y][x],
-                        matrix[x][y],
-                    ];
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
                 }
             }
-            if (dir > 0) {
-                matrix.forEach(row => row.reverse());
-            } else {
-                matrix.reverse();
-            }
+            if (dir > 0) matrix.forEach(row => row.reverse());
+            else matrix.reverse();
         }
 
         function updateScore() {
             scoreElement.innerText = player.score;
-            linesElement.innerText = player.lines;
         }
 
-        // 🌟 新增功能：暫停切換
         function togglePause() {
-            if (!gameRunning && !gameOver) return; // 沒在玩時點擊無效
-
+            if (!gameRunning && !gameOver) return;
             isPaused = !isPaused;
             if (isPaused) {
                 pauseBtn.innerText = '繼續 (P)';
@@ -451,7 +486,6 @@
             } else {
                 pauseBtn.innerText = '暫停 (P)';
                 pauseBtn.style.backgroundColor = '#3498db';
-                // 恢復時重新校正時間，防止方塊瞬間落地
                 lastTime = performance.now();
                 update();
             }
@@ -459,42 +493,30 @@
 
         function update(time = 0) {
             if (!gameRunning || isPaused) return;
-
             const deltaTime = time - lastTime;
             lastTime = time;
-
             dropCounter += deltaTime;
             if (dropCounter > dropInterval) {
                 playerDrop();
             }
-
             draw();
             requestAnimationFrame(update);
         }
 
-        // 監聽鍵盤事件
         document.addEventListener('keydown', event => {
-            // P 鍵隨時可以按 (不論是否在暫停中)
             if (event.key === 'p' || event.key === 'P') {
                 togglePause();
                 return;
             }
-
-            // 如果暫停中或遊戲沒開始，其餘按鍵無效
             if (!gameRunning || isPaused) return;
-
-            if (event.keyCode === 37) { // 左箭頭
-                playerMove(-1);
-            } else if (event.keyCode === 39) { // 右箭頭
-                playerMove(1);
-            } else if (event.keyCode === 40) { // 下箭頭
-                playerDrop();
-            } else if (event.keyCode === 38) { // 上箭頭 (旋轉)
-                playerRotate(1);
-            } else if (event.key === ' ') { // 空白鍵 (瞬間下落)
+            if (event.keyCode === 37) playerMove(-1);
+            else if (event.keyCode === 39) playerMove(1);
+            else if (event.keyCode === 40) playerDrop();
+            else if (event.keyCode === 38) playerRotate(1);
+            else if (event.key === ' ') {
                 event.preventDefault(); 
                 playerHardDrop();
-            } else if (event.key === 'z' || event.key === 'Z') { // Z 鍵 (保留 / 交換)
+            } else if (event.key === 'z' || event.key === 'Z') {
                 playerHold();
             }
         });
@@ -507,6 +529,12 @@
                 holdPieceType = null;
                 hasHeldThisTurn = false;
                 updateScore();
+                
+                // 開始前確認是否有設定名字
+                if (!player.username || player.username === 'Guest') {
+                    changeUsername();
+                }
+                
                 playerReset();
                 gameOver = false;
                 gameRunning = true;
