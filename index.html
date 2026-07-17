@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (終極流暢自訂打擊感音效版)</title>
+    <title>經典俄羅斯方塊 Tetris (終極流暢自訂打擊感音效開關版)</title>
     <!-- 最優先載入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -226,12 +226,28 @@
             border-radius: 4px;
         }
 
+        /* 音效控制樣式 */
+        .sound-control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.72rem;
+            border-top: 1px dashed #4f5d73;
+            padding-top: 5px;
+        }
+
+        .sound-control-row input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: #1abc9c;
+        }
+
         .sound-test-btn {
             background: #34495e;
             border: 1px dashed #f1c40f;
             color: #f1c40f;
-            padding: 3px;
-            font-size: 0.65rem;
+            padding: 2px;
+            font-size: 0.62rem;
             border-radius: 4px;
             cursor: pointer;
             margin-top: 4px;
@@ -245,11 +261,11 @@
 </head>
 <body>
 
-    <h1 id="game-title">TETRIS</h1>
+    <h1>TETRIS</h1>
 
     <div class="game-container">
         
-        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引與音效測試) -->
+        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引與音效開關) -->
         <div class="side-panel">
             <div class="box">
                 <h2>目前玩家</h2>
@@ -282,9 +298,15 @@
 
             <div class="controls-info">
                 <strong style="color: #f1c40f;">💡 提示：</strong><br>
-                1. 數值越低，操作越敏感流暢。<br>
-                2. 影子預測落點。按 P 暫停。<br>
-                <button class="sound-test-btn" onclick="playDropSound()">🔊 測試落地音效</button>
+                1. 影子預測落點。<br>
+                2. 按下 <strong>P</strong> 鍵暫停。<br>
+                
+                <!-- 🔊 音效設定與測試 -->
+                <div class="sound-control-row">
+                    <span>啟用落地音效</span>
+                    <input type="checkbox" id="sound-toggle" checked onchange="toggleSoundSetting(this.checked)">
+                </div>
+                <button class="sound-test-btn" onclick="playDropSound(true)">🔊 測試落地音效</button>
             </div>
         </div>
 
@@ -397,7 +419,7 @@
             down: { first: null, repeat: null }
         };
 
-        // --- ⌨️ 鍵盤與靈敏度儲存載入 ---
+        // --- ⌨️ 按鍵自訂預設配置 ---
         let keyConfigs = {
             left: 'ArrowLeft',
             right: 'ArrowRight',
@@ -410,39 +432,52 @@
 
         let activeBindingAction = null; 
 
-        // --- 🎵 Web Audio API 內建電子音效引擎 ---
+        // --- 🎵 Web Audio API 內建電子音效引擎與設定 ---
         let audioCtx = null;
+        let soundEnabled = true; // 是否開啟音效
+
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
         }
 
-        // 觸發方塊落地音效
-        function playDropSound() {
+        // 載入與切換音效開關
+        function loadSoundSetting() {
+            const savedSound = localStorage.getItem('tetris_sound_enabled');
+            if (savedSound !== null) {
+                soundEnabled = (savedSound === 'true');
+                document.getElementById('sound-toggle').checked = soundEnabled;
+            }
+        }
+
+        function toggleSoundSetting(enabled) {
+            soundEnabled = enabled;
+            localStorage.setItem('tetris_sound_enabled', enabled);
+        }
+
+        // 觸發方塊落地音效 (isTestButton 用來識別是否為測試點擊)
+        function playDropSound(isTestButton = false) {
+            // 如果玩家關閉了音效，直接不播放
+            if (!soundEnabled) return;
+
             try {
                 initAudio();
                 if (!audioCtx) return;
 
-                // 建立一個音訊振盪器與音量控制器
                 let oscillator = audioCtx.createOscillator();
                 let gainNode = audioCtx.createGain();
 
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
 
-                // 設定波形（triangle 比較溫和沉穩，適合當敲擊落地聲）
                 oscillator.type = 'triangle';
-
-                // 頻率控制（快速從 180Hz 降到 60Hz，製造短促的落地重低音感）
                 oscillator.frequency.setValueAtTime(180, audioCtx.currentTime);
                 oscillator.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.12);
 
-                // 音量控制（快速淡出，避免有爆音）
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); // 初始音量 30%
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); 
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
 
-                // 啟動與結束
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + 0.12);
             } catch (e) {
@@ -452,6 +487,7 @@
 
         loadKeyConfigs();
         loadSensitivity();
+        loadSoundSetting();
         updateKeyButtonsUI();
 
         function loadKeyConfigs() {
@@ -703,7 +739,7 @@
                 player.pos.y--;
                 merge(arena, player);
                 
-                // 🎵 觸發方塊鎖定落地音效
+                // 🎵 觸發落地音效
                 playDropSound();
 
                 playerReset();
@@ -720,7 +756,7 @@
             player.pos.y--;
             merge(arena, player);
 
-            // 🎵 觸發方塊鎖定落地音效
+            // 🎵 觸發落地音效
             playDropSound();
 
             playerReset();
@@ -918,8 +954,10 @@
                 return;
             }
 
-            // 按任意鍵時，順便在背景啟用 AudioContext（瀏覽器安全政策要求必須有用戶點擊或按鍵才能放音）
-            initAudio();
+            // 用戶互動時，順便在背景初始化（或喚醒） AudioContext
+            if (soundEnabled) {
+                initAudio();
+            }
 
             if (event.key === 'p' || event.key === 'P') {
                 togglePause();
@@ -982,10 +1020,11 @@
         });
 
         function startGame() {
-            // 點擊開始時，啟動或恢復瀏覽器的音訊功能
-            initAudio();
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
+            if (soundEnabled) {
+                initAudio();
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
             }
 
             if (gameOver || !gameRunning) {
