@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (終極流暢自訂打擊感音效開關版)</title>
+    <title>經典俄羅斯方塊 Tetris (全功能音效曲風自訂版)</title>
     <!-- 最優先載入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -147,7 +147,7 @@
         #pause-btn { background-color: #3498db; }
         #pause-btn:hover { background-color: #2980b9; }
 
-        /* 自定義按鍵設定與靈敏度面板 */
+        /* 自定義面板控制 */
         .key-settings-title {
             font-weight: bold;
             color: #f1c40f;
@@ -187,7 +187,6 @@
             animation: pulse 1s infinite;
         }
 
-        /* 靈敏度拉桿樣式 */
         .slider-row {
             display: flex;
             flex-direction: column;
@@ -203,11 +202,21 @@
             margin-bottom: 2px;
         }
 
-        .slider-row input[type="range"] {
+        .slider-row input[type="range"], .sound-style-select {
             width: 100%;
             cursor: pointer;
             accent-color: #1abc9c;
             margin: 2px 0;
+        }
+
+        .sound-style-select {
+            background: #2c3e50;
+            color: #fff;
+            border: 1px solid #7f8c8d;
+            padding: 2px;
+            font-size: 0.7rem;
+            border-radius: 4px;
+            outline: none;
         }
 
         @keyframes pulse {
@@ -226,7 +235,6 @@
             border-radius: 4px;
         }
 
-        /* 音效控制樣式 */
         .sound-control-row {
             display: flex;
             align-items: center;
@@ -242,16 +250,21 @@
             accent-color: #1abc9c;
         }
 
+        .sound-test-container {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
         .sound-test-btn {
             background: #34495e;
             border: 1px dashed #f1c40f;
             color: #f1c40f;
             padding: 2px;
-            font-size: 0.62rem;
+            font-size: 0.6rem;
             border-radius: 4px;
             cursor: pointer;
-            margin-top: 4px;
-            width: 100%;
+            flex: 1;
         }
         .sound-test-btn:hover {
             background: #f1c40f;
@@ -265,7 +278,7 @@
 
     <div class="game-container">
         
-        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引與音效開關) -->
+        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度、操作指引與進階音效控制) -->
         <div class="side-panel">
             <div class="box">
                 <h2>目前玩家</h2>
@@ -297,16 +310,22 @@
             </div>
 
             <div class="controls-info">
-                <strong style="color: #f1c40f;">💡 提示：</strong><br>
-                1. 影子預測落點。<br>
-                2. 按下 <strong>P</strong> 鍵暫停。<br>
-                
-                <!-- 🔊 音效設定與測試 -->
+                <strong style="color: #f1c40f;">🎵 音效風格設定：</strong>
+                <select id="sound-style-select" class="sound-style-select" onchange="changeSoundStyle(this.value)">
+                    <option value="classic">經典 8-Bit 電子</option>
+                    <option value="cyber">科技未來感</option>
+                    <option value="bass">沉穩重低音</option>
+                    <option value="space">太空雷射</option>
+                </select>
+
                 <div class="sound-control-row">
-                    <span>啟用落地音效</span>
+                    <span>啟用音效</span>
                     <input type="checkbox" id="sound-toggle" checked onchange="toggleSoundSetting(this.checked)">
                 </div>
-                <button class="sound-test-btn" onclick="playDropSound(true)">🔊 測試落地音效</button>
+                <div class="sound-test-container">
+                    <button class="sound-test-btn" onclick="playDropSound()">🔊 試聽落地</button>
+                    <button class="sound-test-btn" onclick="playClearSound()">✨ 試聽消除</button>
+                </div>
             </div>
         </div>
 
@@ -354,14 +373,11 @@
         const supabaseUrl = 'https://tevslrifouvgajmogozf.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRldnNscmlmb3V2Z2FqbW9nb3pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxODE2OTcsImV4cCI6MjA5OTc1NzY5N30.8W0yZlzcIlEXpphDXecGN9HMMUIOZqJEwc5AAcO5vVg';
 
-        // 安全初始化 Supabase
         let supabaseClient;
         if (typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
         } else if (typeof window.supabase !== 'undefined') {
             supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
-        } else {
-            console.error("Supabase SDK 載入失敗，請檢查網路連線。");
         }
 
         const canvas = document.getElementById('tetris');
@@ -408,7 +424,6 @@
         let gameRunning = false;
         let isPaused = false;
 
-        // --- ⚙️ 左右移動靈敏度控制設定 (DAS & ARR) ---
         let DAS = 170; 
         let ARR = 35;  
 
@@ -419,7 +434,6 @@
             down: { first: null, repeat: null }
         };
 
-        // --- ⌨️ 按鍵自訂預設配置 ---
         let keyConfigs = {
             left: 'ArrowLeft',
             right: 'ArrowRight',
@@ -432,9 +446,10 @@
 
         let activeBindingAction = null; 
 
-        // --- 🎵 Web Audio API 內建電子音效引擎與設定 ---
+        // --- 🎵 頂級晶片合成音效引擎配置 ---
         let audioCtx = null;
-        let soundEnabled = true; // 是否開啟音效
+        let soundEnabled = true;
+        let soundStyle = 'classic'; // 預設曲風
 
         function initAudio() {
             if (!audioCtx) {
@@ -442,12 +457,16 @@
             }
         }
 
-        // 載入與切換音效開關
         function loadSoundSetting() {
             const savedSound = localStorage.getItem('tetris_sound_enabled');
             if (savedSound !== null) {
                 soundEnabled = (savedSound === 'true');
                 document.getElementById('sound-toggle').checked = soundEnabled;
+            }
+            const savedStyle = localStorage.getItem('tetris_sound_style');
+            if (savedStyle !== null) {
+                soundStyle = savedStyle;
+                document.getElementById('sound-style-select').value = soundStyle;
             }
         }
 
@@ -456,33 +475,96 @@
             localStorage.setItem('tetris_sound_enabled', enabled);
         }
 
-        // 觸發方塊落地音效 (isTestButton 用來識別是否為測試點擊)
-        function playDropSound(isTestButton = false) {
-            // 如果玩家關閉了音效，直接不播放
-            if (!soundEnabled) return;
+        function changeSoundStyle(style) {
+            soundStyle = style;
+            localStorage.setItem('tetris_sound_style', style);
+            playClearSound(); // 切換風格時試聽消除音效
+        }
 
+        // 🟢 1. 方塊落地音效合成器
+        function playDropSound() {
+            if (!soundEnabled) return;
             try {
                 initAudio();
-                if (!audioCtx) return;
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
 
-                let oscillator = audioCtx.createOscillator();
-                let gainNode = audioCtx.createGain();
+                if (soundStyle === 'classic') {
+                    osc.type = 'square'; // 復古方波
+                    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                } else if (soundStyle === 'cyber') {
+                    osc.type = 'sine'; // 乾淨正弦波
+                    osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                } else if (soundStyle === 'bass') {
+                    osc.type = 'triangle'; // 三角波重低音
+                    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                } else if (soundStyle === 'space') {
+                    osc.type = 'sawtooth'; // 鋸齒波
+                    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                }
 
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {}
+        }
 
-                oscillator.type = 'triangle';
-                oscillator.frequency.setValueAtTime(180, audioCtx.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.12);
+        // 🔵 2. 消除行數音效合成器 (雙音階/和弦上升感)
+        function playClearSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                let osc1 = audioCtx.createOscillator();
+                let osc2 = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioCtx.destination);
 
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); 
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                if (soundStyle === 'classic') {
+                    osc1.type = 'square'; osc2.type = 'square';
+                    // 經典紅白機雙音階效果 523Hz(C5) -> 784Hz(G5)
+                    osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                    osc1.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.08);
+                    osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+                    osc2.frequency.setValueAtTime(987.77, audioCtx.currentTime + 0.08); // B5
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                } else if (soundStyle === 'cyber') {
+                    osc1.type = 'sine'; osc2.type = 'sine';
+                    osc1.frequency.setValueAtTime(600, audioCtx.currentTime);
+                    osc1.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.2);
+                    osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    osc2.frequency.exponentialRampToValueAtTime(1600, audioCtx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                } else if (soundStyle === 'bass') {
+                    osc1.type = 'triangle'; osc2.type = 'sine';
+                    osc1.frequency.setValueAtTime(220, audioCtx.currentTime);
+                    osc1.frequency.linearRampToValueAtTime(440, audioCtx.currentTime + 0.25);
+                    osc2.frequency.setValueAtTime(330, audioCtx.currentTime);
+                    osc2.frequency.linearRampToValueAtTime(660, audioCtx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+                } else if (soundStyle === 'space') {
+                    osc1.type = 'sawtooth'; osc2.type = 'sawtooth';
+                    osc1.frequency.setValueAtTime(300, audioCtx.currentTime);
+                    osc1.frequency.linearRampToValueAtTime(1500, audioCtx.currentTime + 0.18);
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                }
 
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.12);
-            } catch (e) {
-                console.error("音效播放失敗", e);
-            }
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+                osc1.start(); osc2.start();
+                osc1.stop(audioCtx.currentTime + 0.25); osc2.stop(audioCtx.currentTime + 0.25);
+            } catch (e) {}
         }
 
         loadKeyConfigs();
@@ -493,11 +575,7 @@
         function loadKeyConfigs() {
             const savedConfigs = localStorage.getItem('tetris_key_configs');
             if (savedConfigs) {
-                try {
-                    keyConfigs = JSON.parse(savedConfigs);
-                } catch(e) {
-                    console.error("載入按鍵設定失敗", e);
-                }
+                try { keyConfigs = JSON.parse(savedConfigs); } catch(e) {}
             }
         }
 
@@ -519,12 +597,10 @@
         function updateSensitivity(type, value) {
             const val = parseInt(value);
             if (type === 'das') {
-                DAS = val;
-                document.getElementById('das-val').innerText = val + 'ms';
+                DAS = val; document.getElementById('das-val').innerText = val + 'ms';
                 localStorage.setItem('tetris_das', val);
             } else if (type === 'arr') {
-                ARR = val;
-                document.getElementById('arr-val').innerText = val + 'ms';
+                ARR = val; document.getElementById('arr-val').innerText = val + 'ms';
                 localStorage.setItem('tetris_arr', val);
             }
         }
@@ -561,7 +637,6 @@
             }
             player.username = savedName;
             nameDisplay.innerText = player.username;
-
             renderLeaderboard();
         }
 
@@ -582,9 +657,7 @@
                     .select('name, score')
                     .order('score', { ascending: false })
                     .limit(5);
-
                 if (error) throw error;
-
                 leaderboardElement.innerHTML = '';
                 for (let i = 0; i < 5; i++) {
                     const li = document.createElement('li');
@@ -593,7 +666,6 @@
                         if (i === 0) rankClass = 'class="rank-gold"';
                         else if (i === 1) rankClass = 'class="rank-silver"';
                         else if (i === 2) rankClass = 'class="rank-bronze"';
-
                         li.innerHTML = `<span ${rankClass}>${i+1}. ${data[i].name}</span> <span>${data[i].score}</span>`;
                     } else {
                         li.innerHTML = `<span style="color: #5d6d7e">${i+1}. ---</span> <span style="color: #5d6d7e">0</span>`;
@@ -601,7 +673,6 @@
                     leaderboardElement.appendChild(li);
                 }
             } catch (err) {
-                console.error('無法載入線上排行榜:', err);
                 leaderboardElement.innerHTML = '<li style="color: red;">載入失敗</li>';
             }
         }
@@ -612,19 +683,14 @@
                 const { error } = await supabaseClient
                     .from('leaderboard')
                     .insert([{ name: player.username, score: player.score }]);
-
                 if (error) throw error;
                 renderLeaderboard();
-            } catch (err) {
-                console.error('上傳分數失敗:', err);
-            }
+            } catch (err) {}
         }
 
         function createMatrix(w, h) {
             const matrix = [];
-            while (h--) {
-                matrix.push(new Array(w).fill(0));
-            }
+            while (h--) { matrix.push(new Array(w).fill(0)); }
             return matrix;
         }
 
@@ -640,9 +706,7 @@
 
         function getGhostY() {
             let ghostY = player.pos.y;
-            while (!collide(arena, { pos: { x: player.pos.x, y: ghostY + 1 }, matrix: player.matrix })) {
-                ghostY++;
-            }
+            while (!collide(arena, { pos: { x: player.pos.x, y: ghostY + 1 }, matrix: player.matrix })) { ghostY++; }
             return ghostY;
         }
 
@@ -650,12 +714,10 @@
             context.fillStyle = '#000';
             context.fillRect(0, 0, canvas.width, canvas.height);
             drawMatrix(context, arena, {x: 0, y: 0});
-            
             if (gameRunning && !gameOver && !isPaused && player.matrix) {
                 const ghostY = getGhostY();
                 drawMatrix(context, player.matrix, { x: player.pos.x, y: ghostY }, true);
             }
-
             drawMatrix(context, player.matrix, player.pos);
             drawHold();
         }
@@ -697,9 +759,7 @@
         function merge(arena, player) {
             player.matrix.forEach((row, y) => {
                 row.forEach((value, x) => {
-                    if (value !== 0) {
-                        arena[y + player.pos.y][x + player.pos.x] = value;
-                    }
+                    if (value !== 0) { arena[y + player.pos.y][x + player.pos.x] = value; }
                 });
             });
         }
@@ -708,11 +768,7 @@
             const [m, o] = [player.matrix, player.pos];
             for (let y = 0; y < m.length; ++y) {
                 for (let x = 0; x < m[y].length; ++x) {
-                    if (m[y][x] !== 0 &&
-                       (arena[y + o.y] &&
-                        arena[y + o.y][x + o.x]) !== 0) {
-                        return true;
-                    }
+                    if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) { return true; }
                 }
             }
             return false;
@@ -720,6 +776,8 @@
 
         function arenaSweep() {
             let rowCount = 1;
+            let clearedLines = 0; // 紀錄本次消除了幾行
+            
             outer: for (let y = arena.length - 1; y > 0; --y) {
                 for (let x = 0; x < arena[y].length; ++x) {
                     if (arena[y][x] === 0) continue outer;
@@ -730,6 +788,14 @@
                 player.score += rowCount * 10;
                 player.lines += 1;
                 rowCount *= 2;
+                clearedLines++;
+            }
+
+            // 🎵 如果有消除行數，觸發消除音效；如果只是普通著地，則觸發落地音效
+            if (clearedLines > 0) {
+                playClearSound();
+            } else {
+                playDropSound();
             }
         }
 
@@ -738,29 +804,19 @@
             if (collide(arena, player)) {
                 player.pos.y--;
                 merge(arena, player);
-                
-                // 🎵 觸發落地音效
-                playDropSound();
-
+                arenaSweep(); // 這裡面會智能判斷播落地音效或消除音效
                 playerReset();
-                arenaSweep();
                 updateScore();
             }
             dropCounter = 0;
         }
 
         function playerHardDrop() {
-            while (!collide(arena, player)) {
-                player.pos.y++;
-            }
+            while (!collide(arena, player)) { player.pos.y++; }
             player.pos.y--;
             merge(arena, player);
-
-            // 🎵 觸發落地音效
-            playDropSound();
-
+            arenaSweep(); // 這裡面會智能判斷播落地音效或消除音效
             playerReset();
-            arenaSweep();
             updateScore();
             dropCounter = 0;
         }
@@ -784,13 +840,7 @@
 
             if (collide(arena, player)) {
                 saveScoreToLeaderboard();
-                
                 arena.forEach(row => row.fill(0));
-                player.score = 0;
-                player.lines = 0;
-                holdPieceType = null;
-                updateScore();
-
                 gameOver = true;
                 gameRunning = false;
                 clearAllMoveTimers();
@@ -834,20 +884,12 @@
 
         function rotate(matrix, dir) {
             for (let y = 0; y < matrix.length; ++y) {
-                for (let x = 0; x < y; ++x) {
-                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
-                }
+                for (let x = 0; x < y; ++x) { [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]]; }
             }
-            if (dir > 0) {
-                matrix.forEach(row => row.reverse());
-            } else {
-                matrix.reverse();
-            }
+            if (dir > 0) { matrix.forEach(row => row.reverse()); } else { matrix.reverse(); }
         }
 
-        function updateScore() {
-            scoreElement.innerText = player.score;
-        }
+        function updateScore() { scoreElement.innerText = player.score; }
 
         function togglePause() {
             if (!gameRunning && !gameOver) return;
@@ -869,66 +911,34 @@
             const deltaTime = time - lastTime;
             lastTime = time;
             dropCounter += deltaTime;
-            if (dropCounter > dropInterval) {
-                playerDrop();
-            }
+            if (dropCounter > dropInterval) { playerDrop(); }
             draw();
             requestAnimationFrame(update);
         }
 
         function handleKeyAction(action, actionType) {
             if (!gameRunning || isPaused) return;
-            
             if (actionType === 'down') {
                 if (action === 'left') {
-                    playerMove(-1);
-                    draw();
-                    moveTimers.left.first = setTimeout(() => {
-                        moveTimers.left.repeat = setInterval(() => {
-                            playerMove(-1);
-                            draw();
-                        }, ARR);
-                    }, DAS);
-                } 
-                else if (action === 'right') {
-                    playerMove(1);
-                    draw();
-                    moveTimers.right.first = setTimeout(() => {
-                        moveTimers.right.repeat = setInterval(() => {
-                            playerMove(1);
-                            draw();
-                        }, ARR);
-                    }, DAS);
-                } 
-                else if (action === 'down') {
-                    playerDrop();
-                    draw();
-                    moveTimers.down.repeat = setInterval(() => {
-                        playerDrop();
-                        draw();
-                    }, 50);
+                    playerMove(-1); draw();
+                    moveTimers.left.first = setTimeout(() => { moveTimers.left.repeat = setInterval(() => { playerMove(-1); draw(); }, ARR); }, DAS);
+                } else if (action === 'right') {
+                    playerMove(1); draw();
+                    moveTimers.right.first = setTimeout(() => { moveTimers.right.repeat = setInterval(() => { playerMove(1); draw(); }, ARR); }, DAS);
+                } else if (action === 'down') {
+                    playerDrop(); draw();
+                    moveTimers.down.repeat = setInterval(() => { playerDrop(); draw(); }, 50);
                 }
-            } 
-            else if (actionType === 'up') {
-                if (action === 'left') {
-                    clearTimeout(moveTimers.left.first);
-                    clearInterval(moveTimers.left.repeat);
-                } 
-                else if (action === 'right') {
-                    clearTimeout(moveTimers.right.first);
-                    clearInterval(moveTimers.right.repeat);
-                } 
-                else if (action === 'down') {
-                    clearInterval(moveTimers.down.repeat);
-                }
+            } else if (actionType === 'up') {
+                if (action === 'left') { clearTimeout(moveTimers.left.first); clearInterval(moveTimers.left.repeat); }
+                else if (action === 'right') { clearTimeout(moveTimers.right.first); clearInterval(moveTimers.right.repeat); }
+                else if (action === 'down') { clearInterval(moveTimers.down.repeat); }
             }
         }
 
         function clearAllMoveTimers() {
-            clearTimeout(moveTimers.left.first);
-            clearInterval(moveTimers.left.repeat);
-            clearTimeout(moveTimers.right.first);
-            clearInterval(moveTimers.right.repeat);
+            clearTimeout(moveTimers.left.first); clearInterval(moveTimers.left.repeat);
+            clearTimeout(moveTimers.right.first); clearInterval(moveTimers.right.repeat);
             clearInterval(moveTimers.down.repeat);
             keysPressed = {};
         }
@@ -937,116 +947,59 @@
             if (activeBindingAction) {
                 event.preventDefault();
                 const pressedKey = event.key;
-                
                 if (pressedKey === 'Escape') {
                     document.getElementById(`set-${activeBindingAction}`).classList.remove('waiting');
-                    updateKeyButtonsUI();
-                    activeBindingAction = null;
-                    return;
+                    updateKeyButtonsUI(); activeBindingAction = null; return;
                 }
-
                 keyConfigs[activeBindingAction] = pressedKey;
                 localStorage.setItem('tetris_key_configs', JSON.stringify(keyConfigs));
-                
                 document.getElementById(`set-${activeBindingAction}`).classList.remove('waiting');
-                updateKeyButtonsUI();
-                activeBindingAction = null;
-                return;
+                updateKeyButtonsUI(); activeBindingAction = null; return;
             }
 
-            // 用戶互動時，順便在背景初始化（或喚醒） AudioContext
-            if (soundEnabled) {
-                initAudio();
-            }
+            if (soundEnabled) { initAudio(); }
 
-            if (event.key === 'p' || event.key === 'P') {
-                togglePause();
-                return;
-            }
-            
+            if (event.key === 'p' || event.key === 'P') { togglePause(); return; }
             if (!gameRunning || isPaused) return;
-
             if (keysPressed[event.key]) return;
             keysPressed[event.key] = true;
 
             let currentAction = null;
-            for (let action in keyConfigs) {
-                if (keyConfigs[action] === event.key) {
-                    currentAction = action;
-                    break;
-                }
-            }
-
+            for (let action in keyConfigs) { if (keyConfigs[action] === event.key) { currentAction = action; break; } }
             if (!currentAction) return;
 
             if (currentAction === 'left' || currentAction === 'right' || currentAction === 'down') {
-                event.preventDefault();
-                handleKeyAction(currentAction, 'down');
-            } 
-            else if (currentAction === 'rotateCW') {
-                event.preventDefault();
-                playerRotate(1);
-                draw();
-            } 
-            else if (currentAction === 'rotateCCW') {
-                event.preventDefault();
-                playerRotate(-1);
-                draw();
-            } 
-            else if (currentAction === 'hardDrop') {
-                event.preventDefault(); 
-                playerHardDrop();
-                draw();
-            } 
-            else if (currentAction === 'hold') {
-                event.preventDefault();
-                playerHold();
+                event.preventDefault(); handleKeyAction(currentAction, 'down');
+            } else if (currentAction === 'rotateCW') {
+                event.preventDefault(); playerRotate(1); draw();
+            } else if (currentAction === 'rotateCCW') {
+                event.preventDefault(); playerRotate(-1); draw();
+            } else if (currentAction === 'hardDrop') {
+                event.preventDefault(); playerHardDrop(); draw();
+            } else if (currentAction === 'hold') {
+                event.preventDefault(); playerHold();
             }
         });
 
         document.addEventListener('keyup', event => {
             keysPressed[event.key] = false;
-            
             let currentAction = null;
-            for (let action in keyConfigs) {
-                if (keyConfigs[action] === event.key) {
-                    currentAction = action;
-                    break;
-                }
-            }
-            if (currentAction === 'left' || currentAction === 'right' || currentAction === 'down') {
-                handleKeyAction(currentAction, 'up');
-            }
+            for (let action in keyConfigs) { if (keyConfigs[action] === event.key) { currentAction = action; break; } }
+            if (currentAction === 'left' || currentAction === 'right' || currentAction === 'down') { handleKeyAction(currentAction, 'up'); }
         });
 
         function startGame() {
             if (soundEnabled) {
                 initAudio();
-                if (audioCtx && audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
+                if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
             }
-
             if (gameOver || !gameRunning) {
                 arena.forEach(row => row.fill(0));
-                player.score = 0;
-                player.lines = 0;
-                holdPieceType = null;
-                hasHeldThisTurn = false;
-                updateScore();
-                
-                if (!player.username || player.username === 'Guest') {
-                    changeUsername();
-                }
-                
-                playerReset();
-                gameOver = false;
-                gameRunning = true;
-                isPaused = false;
-                pauseBtn.innerText = '暫停 (P)';
-                pauseBtn.style.backgroundColor = '#3498db';
-                lastTime = performance.now();
-                update();
+                player.score = 0; player.lines = 0; holdPieceType = null; hasHeldThisTurn = false; updateScore();
+                if (!player.username || player.username === 'Guest') { changeUsername(); }
+                playerReset(); gameOver = false; gameRunning = true; isPaused = false;
+                pauseBtn.innerText = '暫停 (P)'; pauseBtn.style.backgroundColor = '#3498db';
+                lastTime = performance.now(); update();
                 document.getElementById('start-btn').innerText = '重新開始';
             }
         }
