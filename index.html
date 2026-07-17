@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (專業優化版)</title>
+    <title>經典俄羅斯方塊 Tetris (自訂按鍵優化版)</title>
     <!-- 1. 最優先載入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -48,7 +48,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            min-width: 160px;
+            min-width: 170px;
         }
 
         .box {
@@ -121,10 +121,59 @@
         #pause-btn { background-color: #3498db; }
         #pause-btn:hover { background-color: #2980b9; }
 
+        /* 自定義按鍵設定面板樣式 */
+        .key-settings-title {
+            font-weight: bold;
+            color: #f1c40f;
+            margin-top: 5px;
+            font-size: 0.85rem;
+        }
+
+        .key-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 0.75rem;
+        }
+
+        .key-btn {
+            background: #2c3e50;
+            border: 1px solid #7f8c8d;
+            color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            min-width: 60px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .key-btn:hover {
+            background: #16a085;
+            border-color: #1abc9c;
+        }
+
+        .key-btn.waiting {
+            background: #e67e22;
+            border-color: #d35400;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
         .controls-info {
             font-size: 0.75rem;
             color: #95a5a6;
-            line-height: 1.5;
+            line-height: 1.4;
+            border-top: 1px solid #4f5d73;
+            padding-top: 8px;
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -142,13 +191,25 @@
             </div>
 
             <div class="box">
-                <h2>保留 (Z)</h2>
+                <h2>保留</h2>
                 <canvas id="hold-canvas" width="80" height="80"></canvas>
             </div>
             
             <div class="box">
                 <h2>分數</h2>
                 <p id="score">0</p>
+            </div>
+
+            <!-- ⌨️ 鍵盤自定義面板 -->
+            <div class="box">
+                <div class="key-settings-title">⚙️ 鍵盤設定 (點擊按鈕修改)</div>
+                <div class="key-row"><span>向左移動</span><button class="key-btn" id="set-left" onclick="startKeyBinding('left')">載入中</button></div>
+                <div class="key-row"><span>向右移動</span><button class="key-btn" id="set-right" onclick="startKeyBinding('right')">載入中</button></div>
+                <div class="key-row"><span>加速下落</span><button class="key-btn" id="set-down" onclick="startKeyBinding('down')">載入中</button></div>
+                <div class="key-row"><span>順時針轉</span><button class="key-btn" id="set-rotateCW" onclick="startKeyBinding('rotateCW')">載入中</button></div>
+                <div class="key-row"><span>逆時針轉</span><button class="key-btn" id="set-rotateCCW" onclick="startKeyBinding('rotateCCW')">載入中</button></div>
+                <div class="key-row"><span>瞬間落地</span><button class="key-btn" id="set-hardDrop" onclick="startKeyBinding('hardDrop')">載入中</button></div>
+                <div class="key-row"><span>保留方塊</span><button class="key-btn" id="set-hold" onclick="startKeyBinding('hold')">載入中</button></div>
             </div>
 
             <div class="box">
@@ -162,14 +223,9 @@
             <button id="pause-btn" class="btn" onclick="togglePause()">暫停 (P)</button>
             
             <div class="controls-info">
-                <strong>操作說明：</strong><br>
-                ⬅️ / ➡️ : 左右移動 (支援長按流暢移動)<br>
-                ⬇️ : 加速下落<br>
-                ⬆️ : <strong>順時針旋轉</strong><br>
-                <strong>X : 逆時針旋轉 (逆轉)</strong><br>
-                Space : 瞬間落地<br>
-                Z : 保留 / 切換方塊<br>
-                P : 暫停 / 繼續
+                <strong>系統說明：</strong><br>
+                1. 支援長按左右流暢滑動。<br>
+                2. 按下 <strong>P</strong> 鍵可以隨時暫停。
             </div>
         </div>
     </div>
@@ -209,7 +265,6 @@
             '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f000', '#a000f0', '#f00000'
         ];
 
-        // 影子的顏色（與原本方塊同色但帶有半透明）
         const ghostColors = [
             null,
             'rgba(0, 240, 240, 0.25)', 'rgba(0, 0, 240, 0.25)', 'rgba(240, 160, 0, 0.25)', 
@@ -235,8 +290,8 @@
         let isPaused = false;
 
         // --- ⚙️ 左右移動靈敏度控制設定 (DAS & ARR) ---
-        const DAS = 170; // 按住按鍵後，多長毫秒(ms)判定為「開始連續移動」 (預設 170)
-        const ARR = 35;  // 判定連續移動後，每隔多少毫秒(ms)移動一格 (預設 35)
+        const DAS = 170; 
+        const ARR = 35;  
 
         let keysPressed = {};
         let moveTimers = {
@@ -244,6 +299,60 @@
             right: { first: null, repeat: null },
             down: { first: null, repeat: null }
         };
+
+        // --- ⌨️ 鍵盤設定核心邏輯 ---
+        // 預設按鍵對照表 (如果 localstorage 有，就用儲存的)
+        let keyConfigs = {
+            left: 'ArrowLeft',
+            right: 'ArrowRight',
+            down: 'ArrowDown',
+            rotateCW: 'ArrowUp',
+            rotateCCW: 'x',
+            hardDrop: ' ',
+            hold: 'z'
+        };
+
+        let activeBindingAction = null; // 當前正在等待玩家按下按鍵的動作
+
+        // 載入玩家儲存的按鍵
+        loadKeyConfigs();
+        updateKeyButtonsUI();
+
+        function loadKeyConfigs() {
+            const savedConfigs = localStorage.getItem('tetris_key_configs');
+            if (savedConfigs) {
+                try {
+                    keyConfigs = JSON.parse(savedConfigs);
+                } catch(e) {
+                    console.error("載入按鍵設定失敗", e);
+                }
+            }
+        }
+
+        // 更新介面上的按鈕字樣
+        function updateKeyButtonsUI() {
+            for (let action in keyConfigs) {
+                const btn = document.getElementById(`set-${action}`);
+                if (btn) {
+                    let keyName = keyConfigs[action];
+                    if (keyName === ' ') keyName = 'Space';
+                    else if (keyName.startsWith('Arrow')) keyName = keyName.replace('Arrow', '方向鍵');
+                    btn.innerText = keyName.toUpperCase();
+                }
+            }
+        }
+
+        // 開始進行按鍵綁定監聽
+        function startKeyBinding(action) {
+            // 如果已有在綁定，先取消前一個
+            if (activeBindingAction) {
+                document.getElementById(`set-${activeBindingAction}`).classList.remove('waiting');
+            }
+            activeBindingAction = action;
+            const btn = document.getElementById(`set-${action}`);
+            btn.classList.add('waiting');
+            btn.innerText = '請按下鍵盤...';
+        }
 
         // 初始化
         initPlayerAndLeaderboard();
@@ -333,7 +442,6 @@
             if (type === 'Z') return [[7, 7, 0], [0, 7, 7], [0, 0, 0]];
         }
 
-        // 計算並獲取影子的位置
         function getGhostY() {
             let ghostY = player.pos.y;
             while (!collide(arena, { pos: { x: player.pos.x, y: ghostY + 1 }, matrix: player.matrix })) {
@@ -345,19 +453,14 @@
         function draw() {
             context.fillStyle = '#000';
             context.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // 1. 畫固定在地板上的方塊
             drawMatrix(context, arena, {x: 0, y: 0});
             
-            // 2. 畫預測落地的影子 (Ghost Piece)
             if (gameRunning && !gameOver && !isPaused && player.matrix) {
                 const ghostY = getGhostY();
                 drawMatrix(context, player.matrix, { x: player.pos.x, y: ghostY }, true);
             }
 
-            // 3. 畫玩家控制的實體方塊
             drawMatrix(context, player.matrix, player.pos);
-            
             drawHold();
         }
 
@@ -369,8 +472,6 @@
                         if (isGhost) {
                             ctx.fillStyle = ghostColors[value];
                             ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
-                            
-                            // 畫空心虛線框，增加影子質感
                             ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
                             ctx.lineWidth = 0.05;
                             ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
@@ -507,18 +608,15 @@
             draw();
         }
 
-        // 順時針與逆時針旋轉優化
         function playerRotate(dir) {
             const pos = player.pos.x;
             let offset = 1;
             rotate(player.matrix, dir);
-            
-            // 旋轉牆壁碰撞補正 (Super Rotation System 簡易版)
             while (collide(arena, player)) {
                 player.pos.x += offset;
                 offset = -(offset + (offset > 0 ? 1 : -1));
                 if (offset > player.matrix[0].length) {
-                    rotate(player.matrix, -dir); // 失敗則還原旋轉
+                    rotate(player.matrix, -dir);
                     player.pos.x = pos;
                     return;
                 }
@@ -532,9 +630,9 @@
                 }
             }
             if (dir > 0) {
-                matrix.forEach(row => row.reverse()); // 順時針
+                matrix.forEach(row => row.reverse());
             } else {
-                matrix.reverse();                     // 逆時針 (逆轉)
+                matrix.reverse();
             }
         }
 
@@ -569,25 +667,22 @@
             requestAnimationFrame(update);
         }
 
-        // --- ⚙️ 高靈敏度操作引擎 (DAS & ARR 控制) ---
-        
-        function handleKeyAction(key, actionType) {
+        // --- ⚙️ 操作按鍵處理引擎 (支援 DAS 與 ARR) ---
+        function handleKeyAction(action, actionType) {
             if (!gameRunning || isPaused) return;
             
             if (actionType === 'down') {
-                if (key === 'ArrowLeft') {
+                if (action === 'left') {
                     playerMove(-1);
                     draw();
-                    // 啟動 DAS (按住延遲) 
                     moveTimers.left.first = setTimeout(() => {
-                        // 啟動 ARR (連續移動速度)
                         moveTimers.left.repeat = setInterval(() => {
                             playerMove(-1);
                             draw();
                         }, ARR);
                     }, DAS);
                 } 
-                else if (key === 'ArrowRight') {
+                else if (action === 'right') {
                     playerMove(1);
                     draw();
                     moveTimers.right.first = setTimeout(() => {
@@ -597,25 +692,25 @@
                         }, ARR);
                     }, DAS);
                 } 
-                else if (key === 'ArrowDown') {
+                else if (action === 'down') {
                     playerDrop();
                     draw();
                     moveTimers.down.repeat = setInterval(() => {
                         playerDrop();
                         draw();
-                    }, 50); // 快速下落頻率
+                    }, 50);
                 }
             } 
             else if (actionType === 'up') {
-                if (key === 'ArrowLeft') {
+                if (action === 'left') {
                     clearTimeout(moveTimers.left.first);
                     clearInterval(moveTimers.left.repeat);
                 } 
-                else if (key === 'ArrowRight') {
+                else if (action === 'right') {
                     clearTimeout(moveTimers.right.first);
                     clearInterval(moveTimers.right.repeat);
                 } 
-                else if (key === 'ArrowDown') {
+                else if (action === 'down') {
                     clearInterval(moveTimers.down.repeat);
                 }
             }
@@ -630,8 +725,33 @@
             keysPressed = {};
         }
 
-        // 鍵盤按下監聽
+        // 鍵盤按下事件監聽
         document.addEventListener('keydown', event => {
+            // 優先處理「正在自定義按鍵」的狀況
+            if (activeBindingAction) {
+                event.preventDefault();
+                const pressedKey = event.key;
+                
+                // 排除一些不允許當作控制鍵的特殊鍵
+                if (pressedKey === 'Escape') {
+                    // 按下 Esc 鍵代表取消設定
+                    document.getElementById(`set-${activeBindingAction}`).classList.remove('waiting');
+                    updateKeyButtonsUI();
+                    activeBindingAction = null;
+                    return;
+                }
+
+                // 綁定成功，寫入設定
+                keyConfigs[activeBindingAction] = pressedKey;
+                localStorage.setItem('tetris_key_configs', JSON.stringify(keyConfigs));
+                
+                document.getElementById(`set-${activeBindingAction}`).classList.remove('waiting');
+                updateKeyButtonsUI();
+                activeBindingAction = null;
+                return;
+            }
+
+            // 處理常規遊戲暫停
             if (event.key === 'p' || event.key === 'P') {
                 togglePause();
                 return;
@@ -639,40 +759,60 @@
             
             if (!gameRunning || isPaused) return;
 
-            // 避免按鍵重複觸發系統預設延遲
+            // 防止重複觸發
             if (keysPressed[event.key]) return;
             keysPressed[event.key] = true;
 
-            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            // 判斷按下的按鍵對應至哪一個遊戲動作
+            let currentAction = null;
+            for (let action in keyConfigs) {
+                if (keyConfigs[action] === event.key) {
+                    currentAction = action;
+                    break;
+                }
+            }
+
+            if (!currentAction) return;
+
+            // 執行對應動作
+            if (currentAction === 'left' || currentAction === 'right' || currentAction === 'down') {
                 event.preventDefault();
-                handleKeyAction(event.key, 'down');
+                handleKeyAction(currentAction, 'down');
             } 
-            else if (event.key === 'ArrowUp') {
+            else if (currentAction === 'rotateCW') {
                 event.preventDefault();
-                playerRotate(1); // 順轉
+                playerRotate(1);
                 draw();
             } 
-            else if (event.key === 'x' || event.key === 'X') {
+            else if (currentAction === 'rotateCCW') {
                 event.preventDefault();
-                playerRotate(-1); // 逆轉 (逆轉功能)
+                playerRotate(-1);
                 draw();
             } 
-            else if (event.key === ' ') {
+            else if (currentAction === 'hardDrop') {
                 event.preventDefault(); 
                 playerHardDrop();
                 draw();
             } 
-            else if (event.key === 'z' || event.key === 'Z') {
+            else if (currentAction === 'hold') {
                 event.preventDefault();
                 playerHold();
             }
         });
 
-        // 鍵盤放開監聽
+        // 鍵盤放開事件監聽
         document.addEventListener('keyup', event => {
             keysPressed[event.key] = false;
-            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-                handleKeyAction(event.key, 'up');
+            
+            let currentAction = null;
+            for (let action in keyConfigs) {
+                if (keyConfigs[action] === event.key) {
+                    currentAction = action;
+                    break;
+                }
+            }
+            if (currentAction === 'left' || currentAction === 'right' || currentAction === 'down') {
+                handleKeyAction(currentAction, 'up');
             }
         });
 
