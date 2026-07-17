@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (黃金三欄寬螢幕優化版)</title>
+    <title>經典俄羅斯方塊 Tetris (終極流暢自訂版)</title>
     <!-- 最優先載入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -29,7 +29,7 @@
             text-align: center;
         }
 
-        /* 核心：三欄式橫向布局 */
+        /* 三欄式橫向布局 */
         .game-container {
             display: flex;
             align-items: stretch;
@@ -39,7 +39,7 @@
             padding: 15px;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            max-height: 90vh; /* 限制最高不超出瀏覽器 */
+            max-height: 90vh;
             box-sizing: border-box;
         }
 
@@ -66,7 +66,6 @@
             background-color: #111;
             display: block;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-            /* 自動調整主畫布高度，避免頂天立地 */
             max-height: 70vh;
             width: auto;
         }
@@ -148,11 +147,11 @@
         #pause-btn { background-color: #3498db; }
         #pause-btn:hover { background-color: #2980b9; }
 
-        /* 自定義按鍵設定面板 */
+        /* 自定義按鍵設定與靈敏度面板 */
         .key-settings-title {
             font-weight: bold;
             color: #f1c40f;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             font-size: 0.8rem;
         }
 
@@ -188,6 +187,29 @@
             animation: pulse 1s infinite;
         }
 
+        /* 靈敏度拉桿樣式 */
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            margin: 8px 0;
+            font-size: 0.72rem;
+            text-align: left;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+        }
+
+        .slider-row input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #1abc9c;
+            margin: 2px 0;
+        }
+
         @keyframes pulse {
             0% { opacity: 0.6; }
             50% { opacity: 1; }
@@ -195,7 +217,7 @@
         }
 
         .controls-info {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             color: #bdc3c7;
             line-height: 1.35;
             text-align: left;
@@ -211,7 +233,7 @@
 
     <div class="game-container">
         
-        <!-- ⬅️ 左側面板 (玩家資訊、保留區、操作指引) -->
+        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引) -->
         <div class="side-panel">
             <div class="box">
                 <h2>目前玩家</h2>
@@ -223,11 +245,30 @@
                 <canvas id="hold-canvas" width="80" height="80"></canvas>
             </div>
 
+            <!-- ⚙️ 靈敏度設定面板 -->
+            <div class="box">
+                <div class="key-settings-title">⚙️ 靈敏度設定</div>
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span>滑動延遲 (DAS)</span>
+                        <span id="das-val" style="color: #1abc9c; font-weight: bold;">170ms</span>
+                    </div>
+                    <input type="range" id="das-slider" min="80" max="300" step="10" value="170" oninput="updateSensitivity('das', this.value)">
+                </div>
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span>滑動速度 (ARR)</span>
+                        <span id="arr-val" style="color: #1abc9c; font-weight: bold;">35ms</span>
+                    </div>
+                    <input type="range" id="arr-slider" min="10" max="100" step="5" value="35" oninput="updateSensitivity('arr', this.value)">
+                </div>
+            </div>
+
             <div class="controls-info">
-                <strong style="color: #f1c40f;">💡 操作指引：</strong><br>
-                1. 支援長按左右流暢滑動。<br>
-                2. 預測影子可幫助精準落地。<br>
-                3. 按下 <strong>P</strong> 鍵可隨時暫停。
+                <strong style="color: #f1c40f;">💡 提示：</strong><br>
+                1. 數值越低，操作越敏感流暢。<br>
+                2. 影子預測落點。<br>
+                3. 按下 <strong>P</strong> 鍵暫停。
             </div>
         </div>
 
@@ -241,7 +282,7 @@
             </div>
         </div>
 
-        <!-- ➡️ 右側面板 (分數、排行榜、按鍵設定) -->
+        <!-- ➡️ 右側面板 (分數、按鍵設定、排行榜) -->
         <div class="side-panel">
             <div class="box">
                 <h2>分數</h2>
@@ -250,7 +291,7 @@
 
             <!-- ⌨️ 鍵盤自定義面板 -->
             <div class="box">
-                <div class="key-settings-title">⚙️ 按鍵綁定</div>
+                <div class="key-settings-title">⌨️ 按鍵綁定</div>
                 <div class="key-row"><span>左移動</span><button class="key-btn" id="set-left" onclick="startKeyBinding('left')">載入中</button></div>
                 <div class="key-row"><span>右移動</span><button class="key-btn" id="set-right" onclick="startKeyBinding('right')">載入中</button></div>
                 <div class="key-row"><span>加速落</span><button class="key-btn" id="set-down" onclick="startKeyBinding('down')">載入中</button></div>
@@ -329,9 +370,9 @@
         let gameRunning = false;
         let isPaused = false;
 
-        // 左右移動靈敏度控制設定 (DAS & ARR)
-        const DAS = 170; 
-        const ARR = 35;  
+        // --- ⚙️ 左右移動靈敏度控制設定 (DAS & ARR) ---
+        let DAS = 170; 
+        let ARR = 35;  
 
         let keysPressed = {};
         let moveTimers = {
@@ -340,7 +381,7 @@
             down: { first: null, repeat: null }
         };
 
-        // 預設按鍵配置
+        // --- ⌨️ 鍵盤與靈敏度儲存載入 ---
         let keyConfigs = {
             left: 'ArrowLeft',
             right: 'ArrowRight',
@@ -354,6 +395,7 @@
         let activeBindingAction = null; 
 
         loadKeyConfigs();
+        loadSensitivity();
         updateKeyButtonsUI();
 
         function loadKeyConfigs() {
@@ -364,6 +406,34 @@
                 } catch(e) {
                     console.error("載入按鍵設定失敗", e);
                 }
+            }
+        }
+
+        function loadSensitivity() {
+            const savedDAS = localStorage.getItem('tetris_das');
+            const savedARR = localStorage.getItem('tetris_arr');
+            if (savedDAS) {
+                DAS = parseInt(savedDAS);
+                document.getElementById('das-slider').value = DAS;
+                document.getElementById('das-val').innerText = DAS + 'ms';
+            }
+            if (savedARR) {
+                ARR = parseInt(savedARR);
+                document.getElementById('arr-slider').value = ARR;
+                document.getElementById('arr-val').innerText = ARR + 'ms';
+            }
+        }
+
+        function updateSensitivity(type, value) {
+            const val = parseInt(value);
+            if (type === 'das') {
+                DAS = val;
+                document.getElementById('das-val').innerText = val + 'ms';
+                localStorage.setItem('tetris_das', val);
+            } else if (type === 'arr') {
+                ARR = val;
+                document.getElementById('arr-val').innerText = val + 'ms';
+                localStorage.setItem('tetris_arr', val);
             }
         }
 
