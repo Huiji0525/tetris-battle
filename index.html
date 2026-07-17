@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>經典俄羅斯方塊 Tetris (終極流暢自訂版)</title>
+    <title>經典俄羅斯方塊 Tetris (終極流暢自訂打擊感音效版)</title>
     <!-- 最優先載入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -225,6 +225,22 @@
             padding: 6px;
             border-radius: 4px;
         }
+
+        .sound-test-btn {
+            background: #34495e;
+            border: 1px dashed #f1c40f;
+            color: #f1c40f;
+            padding: 3px;
+            font-size: 0.65rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 4px;
+            width: 100%;
+        }
+        .sound-test-btn:hover {
+            background: #f1c40f;
+            color: #34495e;
+        }
     </style>
 </head>
 <body>
@@ -233,7 +249,7 @@
 
     <div class="game-container">
         
-        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引) -->
+        <!-- ⬅️ 左側面板 (玩家資訊、保留區、靈敏度設定、操作指引與音效測試) -->
         <div class="side-panel">
             <div class="box">
                 <h2>目前玩家</h2>
@@ -267,8 +283,8 @@
             <div class="controls-info">
                 <strong style="color: #f1c40f;">💡 提示：</strong><br>
                 1. 數值越低，操作越敏感流暢。<br>
-                2. 影子預測落點。<br>
-                3. 按下 <strong>P</strong> 鍵暫停。
+                2. 影子預測落點。按 P 暫停。<br>
+                <button class="sound-test-btn" onclick="playDropSound()">🔊 測試落地音效</button>
             </div>
         </div>
 
@@ -393,6 +409,46 @@
         };
 
         let activeBindingAction = null; 
+
+        // --- 🎵 Web Audio API 內建電子音效引擎 ---
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // 觸發方塊落地音效
+        function playDropSound() {
+            try {
+                initAudio();
+                if (!audioCtx) return;
+
+                // 建立一個音訊振盪器與音量控制器
+                let oscillator = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                // 設定波形（triangle 比較溫和沉穩，適合當敲擊落地聲）
+                oscillator.type = 'triangle';
+
+                // 頻率控制（快速從 180Hz 降到 60Hz，製造短促的落地重低音感）
+                oscillator.frequency.setValueAtTime(180, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.12);
+
+                // 音量控制（快速淡出，避免有爆音）
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); // 初始音量 30%
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+
+                // 啟動與結束
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.12);
+            } catch (e) {
+                console.error("音效播放失敗", e);
+            }
+        }
 
         loadKeyConfigs();
         loadSensitivity();
@@ -646,6 +702,10 @@
             if (collide(arena, player)) {
                 player.pos.y--;
                 merge(arena, player);
+                
+                // 🎵 觸發方塊鎖定落地音效
+                playDropSound();
+
                 playerReset();
                 arenaSweep();
                 updateScore();
@@ -659,6 +719,10 @@
             }
             player.pos.y--;
             merge(arena, player);
+
+            // 🎵 觸發方塊鎖定落地音效
+            playDropSound();
+
             playerReset();
             arenaSweep();
             updateScore();
@@ -686,6 +750,11 @@
                 saveScoreToLeaderboard();
                 
                 arena.forEach(row => row.fill(0));
+                player.score = 0;
+                player.lines = 0;
+                holdPieceType = null;
+                updateScore();
+
                 gameOver = true;
                 gameRunning = false;
                 clearAllMoveTimers();
@@ -849,6 +918,9 @@
                 return;
             }
 
+            // 按任意鍵時，順便在背景啟用 AudioContext（瀏覽器安全政策要求必須有用戶點擊或按鍵才能放音）
+            initAudio();
+
             if (event.key === 'p' || event.key === 'P') {
                 togglePause();
                 return;
@@ -910,6 +982,12 @@
         });
 
         function startGame() {
+            // 點擊開始時，啟動或恢復瀏覽器的音訊功能
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
             if (gameOver || !gameRunning) {
                 arena.forEach(row => row.fill(0));
                 player.score = 0;
